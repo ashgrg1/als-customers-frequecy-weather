@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weather vs Customer Traffic — Mineral Wells, TX</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f4f0;color:#111;padding:2rem;max-width:1100px;margin:0 auto}
+
+h1{font-size:26px;font-weight:800;color:#111;margin-bottom:4px;letter-spacing:-.3px}
+.sub{font-size:14px;color:#777;font-weight:500;margin-bottom:1.4rem}
+
+.filter-bar{background:#fff;border:1px solid #e0dfd8;border-radius:12px;padding:.85rem 1.1rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.filter-lbl{font-size:10px;font-weight:700;color:#999;letter-spacing:.6px;text-transform:uppercase;margin-right:4px}
+.pill{border:1px solid #ccc;border-radius:20px;padding:5px 14px;background:#faf9f7;cursor:pointer;font-size:11px;font-weight:600;color:#555;white-space:nowrap;transition:all .15s}
+.pill:hover{border-color:#555;color:#111}
+.pill.active{background:#fde8d8;border-color:#c0390b;color:#7a1f00}
+
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem}
+.kpi{background:#fff;border:1px solid #e0dfd8;border-radius:10px;padding:.9rem 1rem;border-top:3px solid #ccc}
+.kpi-num{font-size:24px;font-weight:700;color:#111;line-height:1}
+.kpi-lbl{font-size:11px;color:#888;margin-top:5px;font-weight:500}
+.kpi-sub{font-size:10px;color:#aaa;margin-top:3px}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.chart-box{background:#fff;border:1px solid #e0dfd8;border-radius:12px;padding:1.25rem 1.4rem;margin-bottom:10px}
+.chart-title{font-size:13px;font-weight:800;color:#111;margin-bottom:2px}
+.chart-sub{font-size:11px;color:#888;margin-bottom:1rem}
+
+.badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;margin-left:8px;vertical-align:middle}
+.badge-hot{background:#fde8d8;color:#c0390b}
+.badge-rain{background:#dbeafe;color:#1e40af}
+.badge-wind{background:#f0fdf4;color:#166534}
+.badge-strong-pos{background:#dcfce7;color:#166534}
+.badge-weak-pos{background:#f0fdf4;color:#3d8b5c}
+.badge-none{background:#f3f4f6;color:#6b7280}
+.badge-weak-neg{background:#fef9c3;color:#854d0e}
+.badge-strong-neg{background:#fee2e2;color:#991b1b}
+.insight-box{margin-top:.75rem;padding:8px 12px;background:#f9f8f5;border-radius:8px;font-size:11px;color:#555;line-height:1.6;border-left:3px solid #ccc}
+
+@media(max-width:700px){.kpi-row{grid-template-columns:1fr 1fr}.grid-2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<h1>Weather vs Customer Traffic</h1>
+<p class="sub">Store #102382 · Mineral Wells, TX · Apr 23 – Jun 24, 2026 · Real weather data via Open-Meteo</p>
+
+<div class="filter-bar">
+  <span class="filter-lbl">Month</span>
+  <button class="pill active" data-mo="all" onclick="setMonth('all')">All months</button>
+  <button class="pill" data-mo="04" onclick="setMonth('04')">April 2026</button>
+  <button class="pill" data-mo="05" onclick="setMonth('05')">May 2026</button>
+  <button class="pill" data-mo="06" onclick="setMonth('06')">June 2026</button>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi" style="border-top-color:#e55a00">
+    <div class="kpi-num" id="kHotDay">—</div>
+    <div class="kpi-lbl">Hottest day <span class="badge badge-hot" id="kHotTemp"></span></div>
+    <div class="kpi-sub" id="kHotCust"></div>
+  </div>
+  <div class="kpi" style="border-top-color:#1e40af">
+    <div class="kpi-num" id="kRainDay">—</div>
+    <div class="kpi-lbl">Rainiest day <span class="badge badge-rain" id="kRainAmt"></span></div>
+    <div class="kpi-sub" id="kRainCust"></div>
+  </div>
+  <div class="kpi" style="border-top-color:#0F6E56">
+    <div class="kpi-num" id="kCorr">—</div>
+    <div class="kpi-lbl">Temp vs traffic correlation</div>
+    <div class="kpi-sub" id="kCorrDesc"></div>
+  </div>
+  <div class="kpi" style="border-top-color:#7C3AED">
+    <div class="kpi-num" id="kAvgTemp">—</div>
+    <div class="kpi-lbl">Avg high temp</div>
+    <div class="kpi-sub" id="kAvgTempSub"></div>
+  </div>
+</div>
+
+<!-- Main overlay chart -->
+<div class="chart-box">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px">
+    <div class="chart-title">Daily customer count vs temperature <span class="badge badge-hot">Temp °F</span></div>
+    <span id="corrBadgeOverlay" class="badge"></span>
+  </div>
+  <div class="chart-sub">Bars = daily customers · Orange line = max temp · Blue dashed = min temp</div>
+  <div style="position:relative;height:300px"><canvas id="cOverlay"></canvas></div>
+  <div id="insightOverlay" class="insight-box"></div>
+</div>
+
+<div class="grid-2">
+  <!-- Scatter -->
+  <div class="chart-box">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px">
+      <div class="chart-title">Temperature vs customers (scatter)</div>
+      <span id="corrBadgeSc" class="badge"></span>
+    </div>
+    <div class="chart-sub">Each dot = one day · Dot size = rainfall · Trend line shown</div>
+    <div style="position:relative;height:240px"><canvas id="cScatter"></canvas></div>
+    <div id="insightSc" class="insight-box"></div>
+  </div>
+  <!-- Rain -->
+  <div class="chart-box">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px">
+      <div class="chart-title">Rainfall vs customers</div>
+      <span id="corrBadgeRa" class="badge"></span>
+    </div>
+    <div class="chart-sub">Blue bars = rainfall (mm) · Green line = customer count · Trend line shown</div>
+    <div style="position:relative;height:240px"><canvas id="cRain"></canvas></div>
+    <div id="insightRa" class="insight-box"></div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <!-- Wind -->
+  <div class="chart-box">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px">
+      <div class="chart-title">Wind speed vs customers</div>
+      <span id="corrBadgeWi" class="badge"></span>
+    </div>
+    <div class="chart-sub">Max daily wind (mph) vs customer count · Trend line shown</div>
+    <div style="position:relative;height:220px"><canvas id="cWind"></canvas></div>
+    <div id="insightWi" class="insight-box"></div>
+  </div>
+  <!-- Temp bucket -->
+  <div class="chart-box">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px">
+      <div class="chart-title">Avg customers by temperature range</div>
+      <span id="corrBadgeBk" class="badge"></span>
+    </div>
+    <div class="chart-sub">How many customers on cool vs hot days?</div>
+    <div style="position:relative;height:220px"><canvas id="cBucket"></canvas></div>
+    <div id="insightBk" class="insight-box"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>
+Chart.register(ChartDataLabels);
+
+/* ── Real weather data from Open-Meteo (Mineral Wells, TX) ── */
+const WX={
+  dates:["2026-04-23","2026-04-24","2026-04-25","2026-04-26","2026-04-27","2026-04-28","2026-04-29","2026-04-30","2026-05-01","2026-05-02","2026-05-03","2026-05-04","2026-05-05","2026-05-06","2026-05-07","2026-05-08","2026-05-09","2026-05-10","2026-05-11","2026-05-12","2026-05-13","2026-05-14","2026-05-15","2026-05-16","2026-05-17","2026-05-18","2026-05-19","2026-05-20","2026-05-21","2026-05-22","2026-05-23","2026-05-24","2026-05-25","2026-05-26","2026-05-27","2026-05-28","2026-05-29","2026-05-30","2026-05-31","2026-06-01","2026-06-02","2026-06-03","2026-06-04","2026-06-05","2026-06-06","2026-06-07","2026-06-08","2026-06-09","2026-06-10","2026-06-11","2026-06-12","2026-06-13","2026-06-14","2026-06-15","2026-06-16","2026-06-17","2026-06-18","2026-06-19","2026-06-20","2026-06-21","2026-06-22","2026-06-23","2026-06-24"],
+  tmax:[81.7,89.0,88.1,86.7,93.7,89.0,70.0,62.5,62.1,74.7,78.5,84.5,92.0,65.9,71.6,74.0,86.1,81.3,75.5,82.7,88.9,91.9,87.1,86.5,87.1,88.9,79.4,72.9,77.0,80.5,79.7,85.0,82.2,80.8,81.9,83.8,89.6,92.0,93.3,90.9,90.4,87.7,85.1,86.3,84.7,89.7,93.7,91.8,95.4,92.4,93.2,92.3,85.6,85.2,88.7,91.8,94.1,79.3,88.4,92.8,95.4,89.2,92.2],
+  tmin:[68.0,70.0,64.2,69.2,72.9,71.3,58.9,55.0,54.4,48.8,52.5,58.8,61.5,52.2,50.7,56.9,62.2,62.2,55.7,55.8,61.2,65.9,70.8,66.4,68.4,71.4,61.4,61.0,64.0,63.3,62.3,64.0,64.0,64.3,64.4,66.0,68.8,73.4,73.2,72.2,71.5,68.7,69.3,72.5,70.5,67.6,77.3,73.8,74.9,77.4,77.0,76.6,74.6,72.1,71.1,72.9,75.4,72.6,72.9,73.8,72.7,75.4,76.8],
+  tmean:[74.0,78.0,72.8,77.1,81.0,78.1,61.9,59.5,58.3,61.3,65.8,71.2,76.3,58.7,61.3,65.4,74.2,69.9,65.6,69.8,75.4,78.9,78.2,77.4,77.6,78.6,70.9,65.8,68.4,70.6,72.2,71.9,71.8,71.6,72.0,73.7,79.7,82.3,82.8,81.7,79.8,77.5,77.6,77.6,74.9,79.3,83.9,82.9,84.9,85.2,83.2,84.0,79.8,77.7,79.5,82.2,84.4,75.6,79.5,83.2,85.2,82.3,84.2],
+  rain:[0.40,0.20,2.90,0.90,0.00,2.70,6.10,4.70,2.10,0.00,0.00,0.00,0.00,0.00,0.00,17.60,0.20,18.80,0.40,0.00,0.00,0.00,0.80,0.00,4.80,2.40,7.80,0.40,34.40,4.80,1.40,7.40,3.60,9.40,3.30,10.40,0.00,4.80,0.00,0.00,0.80,0.90,1.40,2.80,26.60,5.90,0.00,0.00,0.00,0.00,5.30,0.00,2.10,2.00,1.60,0.00,5.60,13.30,2.90,0.10,0.70,4.70,0.00],
+  wind:[30.7,25.9,23.9,27.1,25.2,22.8,25.5,19.9,18.4,10.1,21.3,27.9,25.1,19.4,13.6,18.9,23.4,29.3,17.5,16.0,15.9,26.2,33.2,28.9,36.3,39.4,22.2,17.6,17.7,19.8,11.9,18.1,14.5,18.0,19.4,16.3,16.1,21.4,19.3,15.6,20.2,16.1,20.9,20.8,18.7,28.0,25.2,24.0,26.5,29.3,25.3,21.9,23.1,18.2,16.1,27.9,25.2,30.8,21.0,26.9,20.9,21.9,18.8]
+};
+
+/* ── Customer totals per day ── */
+const CUST_RAW=[{"d":"2026-04-23","c":1298},{"d":"2026-04-24","c":1277},{"d":"2026-04-25","c":1194},{"d":"2026-04-26","c":1156},{"d":"2026-04-27","c":1181},{"d":"2026-04-28","c":1207},{"d":"2026-04-29","c":1119},{"d":"2026-04-30","c":1167},{"d":"2026-05-01","c":1236},{"d":"2026-05-02","c":1280},{"d":"2026-05-03","c":1195},{"d":"2026-05-04","c":1250},{"d":"2026-05-05","c":1191},{"d":"2026-05-06","c":1017},{"d":"2026-05-07","c":1247},{"d":"2026-05-08","c":1303},{"d":"2026-05-09","c":1321},{"d":"2026-05-10","c":995},{"d":"2026-05-11","c":1206},{"d":"2026-05-12","c":1194},{"d":"2026-05-13","c":1301},{"d":"2026-05-14","c":1380},{"d":"2026-05-15","c":1154},{"d":"2026-05-16","c":1284},{"d":"2026-05-17","c":1089},{"d":"2026-05-18","c":1179},{"d":"2026-05-19","c":1107},{"d":"2026-05-20","c":1048},{"d":"2026-05-21","c":1120},{"d":"2026-05-22","c":1335},{"d":"2026-05-23","c":1174},{"d":"2026-05-24","c":1085},{"d":"2026-05-25","c":1174},{"d":"2026-05-26","c":1215},{"d":"2026-05-27","c":1158},{"d":"2026-05-28","c":1308},{"d":"2026-05-29","c":1327},{"d":"2026-05-30","c":1417},{"d":"2026-05-31","c":1356},{"d":"2026-06-01","c":1269},{"d":"2026-06-02","c":1205},{"d":"2026-06-03","c":1163},{"d":"2026-06-04","c":1331},{"d":"2026-06-05","c":1356},{"d":"2026-06-06","c":1248},{"d":"2026-06-07","c":1179},{"d":"2026-06-08","c":1321},{"d":"2026-06-09","c":1219},{"d":"2026-06-10","c":1314},{"d":"2026-06-11","c":1319},{"d":"2026-06-12","c":1425},{"d":"2026-06-13","c":1300},{"d":"2026-06-14","c":1150},{"d":"2026-06-15","c":1092},{"d":"2026-06-16","c":1075},{"d":"2026-06-17","c":1227},{"d":"2026-06-18","c":1244},{"d":"2026-06-19","c":1149},{"d":"2026-06-20","c":1258},{"d":"2026-06-21","c":1241},{"d":"2026-06-22","c":1237},{"d":"2026-06-23","c":1192},{"d":"2026-06-24","c":1137}];
+
+const custMap={};CUST_RAW.forEach(r=>custMap[r.d]=r.c);
+
+let activeMo='all';
+
+function filtered(){
+  return WX.dates.map((d,i)=>({
+    d,i,
+    tmax:WX.tmax[i],tmin:WX.tmin[i],tmean:WX.tmean[i],
+    rain:WX.rain[i],wind:WX.wind[i],
+    cust:custMap[d]||0
+  })).filter(r=>activeMo==='all'||r.d.slice(5,7)===activeMo);
+}
+
+function fmtDate(d){const p=d.split('-');return p[1]+'/'+p[2];}
+
+/* ── Pearson correlation ── */
+function corr(xs,ys){
+  const n=xs.length,mx=xs.reduce((a,v)=>a+v,0)/n,my=ys.reduce((a,v)=>a+v,0)/n;
+  const num=xs.reduce((a,v,i)=>a+(v-mx)*(ys[i]-my),0);
+  const d1=Math.sqrt(xs.reduce((a,v)=>a+(v-mx)**2,0));
+  const d2=Math.sqrt(ys.reduce((a,v)=>a+(v-my)**2,0));
+  return d1&&d2?num/(d1*d2):0;
+}
+
+/* ── Linear regression → {slope, intercept, r} ── */
+function linReg(xs,ys){
+  const r=corr(xs,ys);
+  const mx=xs.reduce((a,v)=>a+v,0)/xs.length;
+  const my=ys.reduce((a,v)=>a+v,0)/ys.length;
+  const slope=r*(Math.sqrt(ys.reduce((a,v)=>a+(v-my)**2,0))/Math.sqrt(xs.reduce((a,v)=>a+(v-mx)**2,0)));
+  const intercept=my-slope*mx;
+  return{slope,intercept,r};
+}
+
+/* ── Correlation badge ── */
+function setCorrBadge(id,r,xLabel,yLabel){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const abs=Math.abs(r);
+  let cls,txt,arrow;
+  if(abs>=0.5){cls=r>0?'badge-strong-pos':'badge-strong-neg';txt=r>0?'Strong positive':'Strong negative';arrow=r>0?'↑↑':'↓↓';}
+  else if(abs>=0.25){cls=r>0?'badge-weak-pos':'badge-weak-neg';txt=r>0?'Moderate positive':'Moderate negative';arrow=r>0?'↑':'↓';}
+  else{cls='badge-none';txt='No clear relation';arrow='→';}
+  el.className='badge '+cls;
+  el.textContent=`r = ${r>=0?'+':''}${r.toFixed(2)} ${arrow} ${txt}`;
+  el.style.marginLeft='0';
+}
+
+/* ── Insight text ── */
+function setInsight(id,r,xLabel,borderColor){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const abs=Math.abs(r),dir=r>0?'positive':'negative';
+  let txt;
+  if(abs>=0.5) txt=`<strong>Strong ${dir} relationship</strong> — ${xLabel} has a notable impact on customer count. As ${xLabel} goes ${r>0?'up, more':'up, fewer'} customers visit the store.`;
+  else if(abs>=0.25) txt=`<strong>Moderate ${dir} relationship</strong> — ${xLabel} shows some influence on traffic. The trend is visible but other factors also play a role.`;
+  else txt=`<strong>Weak / no relationship</strong> — ${xLabel} does not appear to drive customer count in this period. Traffic seems independent of this variable.`;
+  el.innerHTML=txt;
+  el.style.borderLeftColor=borderColor;
+}
+
+const charts={};
+function destroy(k){if(charts[k]){charts[k].destroy();delete charts[k];}}
+
+function render(){
+  const rows=filtered();
+  const dates=rows.map(r=>fmtDate(r.d));
+  const custs=rows.map(r=>r.cust);
+  const tmaxArr=rows.map(r=>r.tmax);
+  const tminArr=rows.map(r=>r.tmin);
+  const rainArr=rows.map(r=>r.rain);
+  const windArr=rows.map(r=>r.wind);
+
+  /* ── KPIs ── */
+  const hotIdx=tmaxArr.indexOf(Math.max(...tmaxArr));
+  const rainIdx=rainArr.indexOf(Math.max(...rainArr));
+  const r=corr(tmaxArr,custs);
+  const rRain=corr(rainArr,custs);
+  const rWind=corr(windArr,custs);
+  const avgMax=tmaxArr.reduce((a,v)=>a+v,0)/tmaxArr.length;
+
+  document.getElementById('kHotDay').textContent=fmtDate(rows[hotIdx].d);
+  document.getElementById('kHotTemp').textContent=rows[hotIdx].tmax+'°F';
+  document.getElementById('kHotCust').textContent=rows[hotIdx].cust.toLocaleString()+' customers that day';
+  document.getElementById('kRainDay').textContent=fmtDate(rows[rainIdx].d);
+  document.getElementById('kRainAmt').textContent=rows[rainIdx].rain+' mm';
+  document.getElementById('kRainCust').textContent=rows[rainIdx].cust.toLocaleString()+' customers that day';
+  document.getElementById('kCorr').textContent=(r>=0?'+':'')+r.toFixed(2);
+  document.getElementById('kCorrDesc').textContent=Math.abs(r)>0.4?(r>0?'Hotter days = more customers':'Hotter days = fewer customers'):'Weak correlation with temp';
+  document.getElementById('kAvgTemp').textContent=avgMax.toFixed(1)+'°F';
+  document.getElementById('kAvgTempSub').textContent='avg daily high · '+rows.length+' days';
+
+  // Badges + insights
+  setCorrBadge('corrBadgeOverlay',r,'Temperature','Customers');
+  setInsight('insightOverlay',r,'temperature','#e55a00');
+  setCorrBadge('corrBadgeSc',r,'Temperature','Customers');
+  setInsight('insightSc',r,'temperature','#e55a00');
+  setCorrBadge('corrBadgeRa',rRain,'Rainfall','Customers');
+  setInsight('insightRa',rRain,'rainfall','#1e40af');
+  setCorrBadge('corrBadgeWi',rWind,'Wind speed','Customers');
+  setInsight('insightWi',rWind,'wind speed','#7C3AED');
+  setCorrBadge('corrBadgeBk',r,'Temperature range','Customers');
+  setInsight('insightBk',r,'temperature range','#f59e0b');
+
+  /* ── Overlay chart ── */
+  destroy('ov');
+  charts.ov=new Chart(document.getElementById('cOverlay'),{
+    type:'bar',
+    data:{labels:dates,datasets:[
+      {type:'bar',label:'Customers',data:custs,backgroundColor:'rgba(15,110,86,.18)',borderColor:'rgba(15,110,86,.5)',borderWidth:1,borderRadius:3,yAxisID:'yC',datalabels:{display:false}},
+      {type:'line',label:'Max Temp °F',data:tmaxArr,borderColor:'#e55a00',backgroundColor:'transparent',borderWidth:2,pointRadius:0,pointHoverRadius:4,tension:0.35,yAxisID:'yT',datalabels:{display:false}},
+      {type:'line',label:'Min Temp °F',data:tminArr,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,.08)',borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:0.35,fill:'-1',yAxisID:'yT',datalabels:{display:false}}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:true,position:'top',align:'end',labels:{font:{size:11,weight:'600'},color:'#444',boxWidth:16,boxHeight:2,padding:12}},datalabels:{display:false}},
+      scales:{
+        x:{ticks:{font:{size:9,weight:'600'},color:'#444',maxRotation:45,autoSkip:true,maxTicksLimit:20},grid:{display:false},border:{display:false}},
+        yC:{position:'left',title:{display:true,text:'Customers',font:{size:11},color:'#0F6E56'},ticks:{font:{size:10},color:'#0F6E56'},grid:{color:'rgba(0,0,0,.05)'},border:{display:false}},
+        yT:{position:'right',title:{display:true,text:'Temp (°F)',font:{size:11},color:'#e55a00'},ticks:{font:{size:10},color:'#e55a00'},grid:{display:false},border:{display:false}}
+      }}
+  });
+
+  /* ── Scatter ── */
+  destroy('sc');
+  const rainByDay=rows.map(r=>r.rain);
+  const maxRain=Math.max(...rainByDay);
+  const regTemp=linReg(tmaxArr,custs);
+  const txSorted=[...tmaxArr].sort((a,b)=>a-b);
+  const trendTempData=[{x:txSorted[0],y:regTemp.slope*txSorted[0]+regTemp.intercept},{x:txSorted[txSorted.length-1],y:regTemp.slope*txSorted[txSorted.length-1]+regTemp.intercept}];
+  charts.sc=new Chart(document.getElementById('cScatter'),{
+    type:'scatter',
+    data:{datasets:[
+      {label:'Day',data:rows.map(r=>({x:r.tmax,y:r.cust,rain:r.rain,d:r.d})),
+        backgroundColor:rows.map(r=>{const heat=Math.min((r.tmax-60)/40,1);return `rgba(${Math.round(229)},${Math.round(90-heat*60)},0,.7)`;}),
+        pointRadius:rows.map(r=>4+Math.round((r.rain/maxRain)*8)),pointHoverRadius:10,datalabels:{display:false}},
+      {type:'line',label:'Trend',data:trendTempData,borderColor:'#e55a00',borderWidth:2,borderDash:[6,3],
+        pointRadius:0,tension:0,fill:false,datalabels:{display:false}}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{title:()=>'',label:c=>c.dataset.label==='Trend'?[]:([`${fmtDate(c.raw.d)}`,`Temp: ${c.raw.x}°F`,`Customers: ${c.raw.y}`,`Rain: ${c.raw.rain}mm`])}},
+        datalabels:{display:false}},
+      scales:{
+        x:{title:{display:true,text:'Max Temp (°F)',font:{size:11},color:'#888'},ticks:{font:{size:10},color:'#555'},grid:{color:'rgba(0,0,0,.06)'},border:{display:false}},
+        y:{title:{display:true,text:'Customers',font:{size:11},color:'#888'},ticks:{font:{size:10},color:'#555'},grid:{color:'rgba(0,0,0,.06)'},border:{display:false}}
+      }}
+  });
+
+  /* ── Rain chart ── */
+  destroy('ra');
+  charts.ra=new Chart(document.getElementById('cRain'),{
+    type:'bar',
+    data:{labels:dates,datasets:[
+      {type:'bar',label:'Rainfall (mm)',data:rainArr,backgroundColor:'rgba(30,64,175,.25)',borderColor:'rgba(30,64,175,.6)',borderWidth:1,borderRadius:3,yAxisID:'yR',datalabels:{display:false}},
+      {type:'line',label:'Customers',data:custs,borderColor:'#0F6E56',backgroundColor:'transparent',borderWidth:2,pointRadius:0,tension:0.35,yAxisID:'yC2',datalabels:{display:false}}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:true,position:'top',align:'end',labels:{font:{size:10,weight:'600'},color:'#444',boxWidth:12,padding:10}},datalabels:{display:false}},
+      scales:{
+        x:{ticks:{font:{size:8,weight:'600'},color:'#444',maxRotation:45,autoSkip:true,maxTicksLimit:12},grid:{display:false},border:{display:false}},
+        yR:{position:'left',title:{display:true,text:'Rain (mm)',font:{size:10},color:'#1e40af'},ticks:{font:{size:9},color:'#1e40af'},grid:{color:'rgba(0,0,0,.05)'},border:{display:false}},
+        yC2:{position:'right',title:{display:true,text:'Customers',font:{size:10},color:'#0F6E56'},ticks:{font:{size:9},color:'#0F6E56'},grid:{display:false},border:{display:false}}
+      }}
+  });
+
+  /* ── Wind scatter ── */
+  destroy('wi');
+  const regWind=linReg(windArr,custs);
+  const wiSorted=[...windArr].sort((a,b)=>a-b);
+  const trendWindData=[{x:wiSorted[0],y:regWind.slope*wiSorted[0]+regWind.intercept},{x:wiSorted[wiSorted.length-1],y:regWind.slope*wiSorted[wiSorted.length-1]+regWind.intercept}];
+  charts.wi=new Chart(document.getElementById('cWind'),{
+    type:'scatter',
+    data:{datasets:[
+      {label:'Day',data:rows.map(r=>({x:r.wind,y:r.cust,d:r.d})),
+        backgroundColor:'rgba(124,58,237,.5)',pointRadius:5,pointHoverRadius:8,datalabels:{display:false}},
+      {type:'line',label:'Trend',data:trendWindData,borderColor:'#7C3AED',borderWidth:2,borderDash:[6,3],
+        pointRadius:0,tension:0,fill:false,datalabels:{display:false}}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{title:()=>'',label:c=>c.dataset.label==='Trend'?[]:[`${fmtDate(c.raw.d)}`,`Wind: ${c.raw.x} mph`,`Customers: ${c.raw.y}`]}},
+        datalabels:{display:false}},
+      scales:{
+        x:{title:{display:true,text:'Max Wind Speed (mph)',font:{size:11},color:'#888'},ticks:{font:{size:10},color:'#555'},grid:{color:'rgba(0,0,0,.06)'},border:{display:false}},
+        y:{title:{display:true,text:'Customers',font:{size:11},color:'#888'},ticks:{font:{size:10},color:'#555'},grid:{color:'rgba(0,0,0,.06)'},border:{display:false}}
+      }}
+  });
+
+  /* ── Temp bucket bar ── */
+  destroy('bk');
+  const buckets=[
+    {label:'< 70°F',min:0,max:70},
+    {label:'70–79°F',min:70,max:80},
+    {label:'80–89°F',min:80,max:90},
+    {label:'90–95°F',min:90,max:95},
+    {label:'> 95°F',min:95,max:999}
+  ];
+  const bktData=buckets.map(b=>{
+    const matches=rows.filter(r=>r.tmax>=b.min&&r.tmax<b.max);
+    return matches.length?Math.round(matches.reduce((a,r)=>a+r.cust,0)/matches.length):null;
+  });
+  const bktClrs=['#185FA5','#0F6E56','#f59e0b','#e55a00','#b91c1c'];
+  charts.bk=new Chart(document.getElementById('cBucket'),{
+    type:'bar',
+    data:{labels:buckets.map(b=>b.label),datasets:[{
+      data:bktData,
+      backgroundColor:bktClrs,
+      borderRadius:6,borderSkipped:false
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:c=>c.parsed.y?c.parsed.y+' avg customers':'No data'}},
+        datalabels:{display:true,anchor:'end',align:'end',offset:2,font:{size:11,weight:'700'},color:'#333',formatter:v=>v?v:''}},
+      layout:{padding:{top:24}},
+      scales:{
+        x:{ticks:{font:{size:10,weight:'600'},color:'#555'},grid:{display:false},border:{display:false}},
+        y:{ticks:{font:{size:10},color:'#555'},grid:{color:'rgba(0,0,0,.06)'},border:{display:false},title:{display:true,text:'Avg customers',font:{size:11},color:'#888'}}
+      }}
+  });
+}
+
+function setMonth(mo){
+  activeMo=mo;
+  document.querySelectorAll('[data-mo]').forEach(b=>{b.className='pill';if(b.dataset.mo===mo)b.classList.add('active');});
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
